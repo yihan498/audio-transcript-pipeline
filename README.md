@@ -2,7 +2,11 @@
 
 ## Version Note v01
 
-2026-06-08 v01: Added a GitHub-ready workflow README for the audio-to-text pipeline. This document explains the processing chain, setup, commands, restart behavior, output structure, and publishing precautions without exposing any concrete audio or transcript content.
+2026-06-08 v01: Added a workflow README for the audio-to-text pipeline. This document explains the processing chain, setup, commands, restart behavior, output structure, and privacy precautions without exposing any concrete audio or transcript content.
+
+## Version Note v02
+
+2026-06-08 v02: Removed repository upload instructions so this README focuses only on the audio transcription workflow itself.
 
 ## What This Is
 
@@ -18,9 +22,9 @@ The workflow treats transcription as an evidence pipeline. It first verifies tha
 
 ## Privacy Boundary
 
-Do not publish source audio, generated transcripts, chunk cache, logs, or API keys to GitHub.
+Do not include source audio, generated transcripts, chunk cache, logs, or API keys in the public workflow package.
 
-The public repository should contain only:
+The reusable workflow package should contain only:
 
 - workflow documentation
 - scripts
@@ -68,7 +72,7 @@ standalone-skill-xiaoe-audio-transcript-pipeline-v01/
     transcribe_local_mp3_batch.py
     collect_transcripts.py
   examples/
-  jobs/                  # local generated output, ignored by git
+  jobs/                  # local generated output
 ```
 
 ## Environment Setup
@@ -253,36 +257,6 @@ python -c "from pathlib import Path; import json; p=Path(r'D:\path\to\job\transc
 
 If Chinese text appears garbled in PowerShell output, do not immediately assume the file is damaged. Check the file with UTF-8 reads in Python or open it in a proper editor.
 
-## GitHub Publishing
-
-Initialize git from this package folder:
-
-```powershell
-cd D:\path\to\standalone-skill-xiaoe-audio-transcript-pipeline-v01
-git init
-git add README.md SKILL.md .gitignore scripts references examples agents
-git status
-git commit -m "Add audio transcript pipeline workflow"
-```
-
-Create a GitHub repository, then connect and push:
-
-```powershell
-git branch -M main
-git remote add origin https://github.com/<your-name>/<your-repo>.git
-git push -u origin main
-```
-
-Before pushing, confirm that these are not staged:
-
-- `jobs/`
-- audio files
-- transcript files containing private content
-- logs
-- `.env`
-- API keys
-- browser auth/cache folders
-
 ## Typical End-To-End Sequence
 
 ```powershell
@@ -308,4 +282,3 @@ The final user-facing transcript files are in:
 ```text
 $jobRoot\transcripts\
 ```
-

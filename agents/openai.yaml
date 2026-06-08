@@ -1,0 +1,3 @@
+display_name: Xiaoe Audio Transcript Pipeline
+short_description: Build versioned China-domestic audio transcription workflows for Xiaoe course audio.
+default_prompt: Create a versioned domestic-only audio transcript job, inventory the audio, choose a domestic ASR engine, and produce raw, cleaned, and notes layers with source-faithful boundaries.

@@ -1,0 +1,18 @@
+{
+  "audio_files": [
+    {
+      "path": "D:\\path\\to\\audio-folder\\sample-lesson-001.mp3",
+      "exists": true,
+      "extension": ".mp3",
+      "size_bytes": 12345678,
+      "duration_seconds": null,
+      "codec": null,
+      "sample_rate": null,
+      "channels": null,
+      "probe_source": null,
+      "warnings": [
+        "ffprobe_unavailable_or_failed"
+      ]
+    }
+  ]
+}

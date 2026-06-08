@@ -1,0 +1,8 @@
+{
+  "engine": "dashscope-file-asr",
+  "model": "fun-asr",
+  "language": "zh",
+  "provider_policy": "china-domestic-only",
+  "status": "planned",
+  "next_step": "Implement or call the selected engine adapter, then write raw/engine-output.json and raw/transcript.raw.md."
+}

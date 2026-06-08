@@ -1,0 +1,35 @@
+# Local generated jobs and private content
+jobs/
+outputs/
+transcripts/
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.aac
+*.mp4
+*.mkv
+*.mov
+*.webm
+
+# Logs and cache
+*.log
+_logs/
+__pycache__/
+*.pyc
+.pytest_cache/
+test-results/
+
+# Secrets and local auth state
+.env
+.env.*
+*.key
+*.pem
+*.token
+.chrome-xiaoe-auth/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

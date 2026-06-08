@@ -1,0 +1,18 @@
+{
+  "job_id": "20260608-sample-audio-job-v01",
+  "title": "sample-audio-job",
+  "created_at": "2026-06-08T08:31:59",
+  "language": "zh",
+  "preferred_engine": "dashscope-file-asr",
+  "asr_model": "fun-asr",
+  "processing_profile": "domestic-balanced",
+  "cleanup_provider": "qwen",
+  "cleanup_model": "qwen-plus",
+  "review_provider": "deepseek",
+  "review_model": "deepseek-v4-pro",
+  "provider_policy": "china-domestic-only",
+  "audio_inputs": [
+    "D:\\path\\to\\audio-folder\\sample-lesson-001.mp3"
+  ],
+  "status": "initialized"
+}

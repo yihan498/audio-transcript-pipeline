@@ -1,112 +1,122 @@
-# Xiaoe Audio Transcript Pipeline
+# Audio Transcript Pipeline
 
-Language: [中文说明](README.zh-CN.md) | English
+[中文说明](README.zh-CN.md)
 
-## Version Note v01
+Turn a folder of long audio files into readable Markdown transcripts.
 
-2026-06-08 v01: Added a workflow README for the audio-to-text pipeline. This document explains the processing chain, setup, commands, restart behavior, output structure, and privacy precautions without exposing any concrete audio or transcript content.
+Supports **long-audio chunking, ASR transcription, resumable batch runs, central transcript export, optional cleanup, and reading notes**. It is designed for course audio, replay recordings, meetings, interviews, and similar batch transcription tasks.
 
-## Version Note v02
+---
 
-2026-06-08 v02: Removed repository upload instructions so this README focuses only on the audio transcription workflow itself.
+## Core Workflow
 
-## Version Note v03
+1. Prepare local MP3 audio files.
+2. Configure API keys.
+3. Run smoke tests to confirm model access and billing.
+4. Batch transcribe the audio folder.
+5. If the run stops, rerun with the same output folder to resume.
+6. Collect all completed transcripts into `transcripts/`.
+7. Optionally generate cleaned transcripts, reading notes, or review outputs.
 
-2026-06-08 v03: Moved the English workflow documentation into `README.en.md` and added language navigation.
+---
 
-## What This Is
+## Features
 
-This repository is a reusable audio-to-text workflow for course or replay audio. It is designed for local audio files and China-domestic model providers, with a clear separation between:
+| Feature | Description |
+|---------|-------------|
+| Local batch audio processing | Scans `.mp3` files in a folder |
+| Long-audio chunking | Splits MP3 files into API-sized chunks |
+| ASR transcription | Uses DashScope / Bailian short-audio ASR by default |
+| Resumable runs | Skips completed files and chunks |
+| Central export | One `.raw.md` per audio file plus a combined file |
+| Layered outputs | Keeps raw transcripts, cleaned transcripts, and notes separate |
+| Privacy first | Audio, transcripts, logs, and keys are excluded by default |
 
-- source inventory
-- raw ASR transcript
-- optional cleaned transcript
-- optional reading notes or review
-- final collected transcript exports
+---
 
-The workflow treats transcription as an evidence pipeline. It first verifies that usable audio exists, then produces raw transcript artifacts, and only then creates cleaned or summarized layers.
+## When To Use It
 
-## Privacy Boundary
+Use this project for:
 
-Do not include source audio, generated transcripts, chunk cache, logs, or API keys in the public workflow package.
+- Course audio, replay audio, meeting recordings, and interviews
+- Audio files too long for a single short-audio ASR call
+- Batch jobs that may need to resume after interruption
+- Centralized transcript output
+- Optional cleanup, notes, or summaries based on raw transcripts
 
-The reusable workflow package should contain only:
+Not ideal for:
 
-- workflow documentation
-- scripts
-- examples that do not contain private content
-- references and contracts
-- `.gitignore`
+- Summarizing videos when no audio, subtitle, or transcript source is available
+- Replacing source-faithful transcription with free-form summaries
+- Publishing private audio or generated transcript content
 
-Generated job output should stay local under `jobs/` unless you intentionally create a sanitized sample.
+---
 
-## Provider Strategy
-
-Default route:
-
-- ASR: Alibaba Cloud DashScope / Bailian short-audio ASR, usually `qwen3-asr-flash`
-- Long local audio: split local MP3 into API-sized chunks, transcribe each chunk, then merge back to one transcript per lesson
-- Cleanup: Qwen or DeepSeek, only after raw transcript exists
-- Notes/review: DeepSeek or Qwen, saved as a separate processed layer
-
-Fallback route:
-
-- If a public or signed media URL cannot be fetched by the ASR provider, use local audio files instead.
-- If a single API call fails because of temporary network interruption, rerun the batch command. Completed chunks and completed lessons are skipped automatically.
-- If billing or quota fails, recharge or switch to another provider, then rerun from the same job folder.
-
-## Directory Layout
+## How It Works
 
 ```text
-standalone-skill-xiaoe-audio-transcript-pipeline-v01/
-  README.md
-  SKILL.md
-  .gitignore
-  references/
-    engine-contract.md
-    cleanup-rules.md
-    output-conventions.md
-  scripts/
-    audio_transcript_pipeline.py
-    dashscope_smoke_test.py
-    dashscope_asr_smoke_test.py
-    deepseek_smoke_test.py
-    run_short_audio_pipeline.py
-    deepseek_notes_from_cleaned.py
-    dashscope_url_transcribe.py
-    mp3_frame_splitter.py
-    transcribe_local_mp3_batch.py
-    collect_transcripts.py
-  examples/
-  jobs/                  # local generated output
+local audio folder
+  -> scan MP3 files
+  -> split long audio
+  -> call ASR per chunk
+  -> save chunk cache
+  -> merge one raw transcript per audio file
+  -> export to transcripts/
+  -> optional cleanup / notes / review
 ```
 
-## Environment Setup
+Key points:
 
-Use Python 3.10 or newer.
+- **Chunking**: long audio is split to fit API limits.
+- **Caching**: each chunk result is saved for restart and debugging.
+- **Merging**: chunk transcripts are merged per audio file.
+- **Central export**: final reading files live under `transcripts/`.
 
-Set API keys in Windows PowerShell:
+---
+
+## Prerequisites
+
+- Windows / macOS / Linux; examples below use Windows PowerShell
+- Python 3.10+
+- DashScope / Bailian API key
+- Optional: DeepSeek API key
+
+---
+
+## Configure API Keys
+
+In PowerShell:
 
 ```powershell
 setx DASHSCOPE_API_KEY "your_dashscope_key"
 setx DEEPSEEK_API_KEY "your_deepseek_key"
 ```
 
-`setx` writes the key to the Windows user environment, but it does not update the current PowerShell process. For the current shell, run:
+`setx` does not update the current PowerShell window. Refresh the current process:
 
 ```powershell
 $env:DASHSCOPE_API_KEY = [Environment]::GetEnvironmentVariable('DASHSCOPE_API_KEY','User')
 $env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY','User')
 ```
 
-Check that the keys are visible:
+Check visibility:
 
 ```powershell
 python -c "import os; print(bool(os.getenv('DASHSCOPE_API_KEY')))"
 python -c "import os; print(bool(os.getenv('DEEPSEEK_API_KEY')))"
 ```
 
-## Smoke Tests
+---
+
+## Quick Start
+
+Enter the project root:
+
+```powershell
+cd D:\path\to\audio-transcript-pipeline
+```
+
+### Step 1: Smoke Tests
 
 Test DashScope text access:
 
@@ -114,30 +124,98 @@ Test DashScope text access:
 python scripts\dashscope_smoke_test.py --model qwen-plus
 ```
 
-Test DashScope short-audio ASR with a small local audio file:
+Test ASR with a short local audio file:
 
 ```powershell
-python scripts\dashscope_asr_smoke_test.py --audio "D:\path\to\short-sample.mp3" --model qwen3-asr-flash
+python scripts\dashscope_asr_smoke_test.py `
+  --audio "D:\path\to\short-sample.mp3" `
+  --model qwen3-asr-flash
 ```
 
-Test DeepSeek text access:
+Optional: test DeepSeek:
 
 ```powershell
 python scripts\deepseek_smoke_test.py --model deepseek-v4-flash
 ```
 
-Only start large batch transcription after these smoke tests pass.
-
-## Batch Transcription Workflow
-
-Create a versioned job folder:
+### Step 2: Batch Transcription
 
 ```powershell
-$jobRoot = "D:\path\to\jobs\part-transcript-YYYYMMDD-v01"
-New-Item -ItemType Directory -Force -Path $jobRoot | Out-Null
+$jobRoot = "D:\path\to\jobs\audio-transcript-YYYYMMDD-v01"
+
+python scripts\transcribe_local_mp3_batch.py `
+  --input-dir "D:\path\to\audio-folder" `
+  --out-root "$jobRoot" `
+  --model qwen3-asr-flash
 ```
 
-Run local MP3 batch transcription:
+### Step 3: Collect Transcripts
+
+```powershell
+python scripts\collect_transcripts.py --root "$jobRoot"
+```
+
+Final transcript files are in:
+
+```text
+$jobRoot\transcripts\
+```
+
+---
+
+## Batch Command Options
+
+```text
+--input-dir     local audio folder
+--out-root      output directory for this job
+--model         ASR model, default qwen3-asr-flash
+--max-seconds   target seconds per chunk, default 240
+--max-bytes     max bytes per chunk, default 9500000
+--retries       retry count for a failed chunk
+--limit         process only the first N files for testing
+--start-at      start at the first filename containing this text
+```
+
+---
+
+## Output Format
+
+```text
+jobRoot/
+  <audio-title>/
+    chunks/
+      chunk_0000.mp3
+      chunks-manifest.json
+    raw/
+      chunk-results/
+        chunk_0000.json
+        chunk_0000.txt
+      transcript.raw.md
+    lesson.json
+  transcripts/
+    index.md
+    index.json
+    part2.raw.combined.md
+    <audio-title>.raw.md
+```
+
+Recommended files:
+
+- `transcripts/index.md`: transcript index
+- `transcripts/index.json`: machine-readable index
+- `transcripts/part2.raw.combined.md`: combined transcript file
+- `transcripts/<audio-title>.raw.md`: one transcript per audio file
+
+Internal files:
+
+- `chunks/`: audio chunks
+- `raw/chunk-results/`: chunk cache and raw API results
+
+---
+
+## Resume After Interruption
+
+If the job stops midway, run the same command again with the same `--out-root`:
 
 ```powershell
 python scripts\transcribe_local_mp3_batch.py `
@@ -146,66 +224,18 @@ python scripts\transcribe_local_mp3_batch.py `
   --model qwen3-asr-flash
 ```
 
-Optional parameters:
+The script will:
 
-```powershell
---max-seconds 240
---max-bytes 9500000
---retries 3
---limit 3
---start-at "filename fragment"
-```
+- skip completed audio files
+- reuse completed chunks
+- continue from missing chunks
+- allow central exports to be regenerated later
 
-The batch script does this:
+---
 
-1. Reads local MP3 files from `--input-dir`.
-2. Creates a per-audio lesson folder under `--out-root`.
-3. Splits each MP3 by frame boundaries into API-sized chunks.
-4. Sends each chunk to DashScope short-audio ASR.
-5. Saves chunk-level JSON and text cache.
-6. Merges chunk text into one `raw/transcript.raw.md` per audio file.
-7. Writes `lesson.json` with status, chunk count, duration estimate, and completion time.
-8. Exports each completed transcript into the central `transcripts/` folder.
+## Optional Cleanup And Notes
 
-## Restart And Resume
-
-The workflow is restartable.
-
-If a run stops because of network interruption, quota, billing, or process shutdown, run the same command again with the same `--out-root`.
-
-Behavior on rerun:
-
-- lessons with `lesson.json` status `done` are skipped
-- chunk cache files already written are reused
-- incomplete lessons continue from the first missing chunk
-- final central exports can be regenerated at any time
-
-## Collect Final Transcripts
-
-After batch transcription, collect completed lesson transcripts into one folder:
-
-```powershell
-python scripts\collect_transcripts.py --root "$jobRoot"
-```
-
-This creates:
-
-```text
-$jobRoot/
-  transcripts/
-    index.md
-    index.json
-    part2.raw.combined.md
-    <one-file-per-audio>.raw.md
-```
-
-Use `transcripts/` as the final reading/export folder. Chunk folders are internal evidence and restart cache.
-
-## Optional Cleanup Layer
-
-Run cleanup only after raw transcript files exist.
-
-For a short sample job:
+Short-audio end-to-end example:
 
 ```powershell
 python scripts\run_short_audio_pipeline.py `
@@ -213,78 +243,120 @@ python scripts\run_short_audio_pipeline.py `
   --audio "D:\path\to\short-sample.mp3"
 ```
 
-For reading notes from an already cleaned transcript:
+Generate reading notes from a cleaned transcript:
 
 ```powershell
 python scripts\deepseek_notes_from_cleaned.py --job-dir "D:\path\to\job"
 ```
 
-Keep these layers separate:
+Recommended layers:
 
-- `raw/transcript.raw.md`: ASR output, closest to source audio
-- `cleaned/transcript.cleaned.md`: punctuation and readability cleanup
-- `notes/notes.source-faithful.md`: source-faithful notes
-- `summary.processed.md`: optional higher-level rewrite or extraction
+```text
+raw/transcript.raw.md              raw ASR transcript
+cleaned/transcript.cleaned.md      cleaned transcript
+notes/notes.source-faithful.md     source-faithful reading notes
+summary.processed.md               optional processed summary
+```
 
-## Output Rules
-
-Every substantial output should include:
-
-- a version note
-- a source/evidence note
-- source file or source URI
-- a boundary statement explaining whether this is raw ASR, cleaned transcript, notes, or processed summary
-
-Do not present raw ASR as factual verification. Transcript text comes from source audio only unless a later review layer explicitly adds external citations.
+---
 
 ## Validation Checklist
 
 Before delivery:
 
-```powershell
-python scripts\collect_transcripts.py --root "$jobRoot"
-```
-
-Then verify:
-
-- `lesson.json` count equals the number of input audio files
+- input audio count matches `lesson.json` count
 - every `lesson.json` has status `done`
-- `transcripts/` contains one `.raw.md` per input audio file
+- `transcripts/` contains the expected number of `.raw.md` files
 - `part2.raw.combined.md` exists
-- `index.json` can be parsed as UTF-8 JSON
-- final transcript files include `## Version Note` and `## Source / Evidence Note`
+- `index.json` parses as UTF-8 JSON
 - final transcript files do not contain internal chunk markers
 
-Example JSON check:
+JSON check:
 
 ```powershell
 python -c "from pathlib import Path; import json; p=Path(r'D:\path\to\job\transcripts\index.json'); d=json.loads(p.read_text(encoding='utf-8')); print(d['completed'], len(d['items']))"
 ```
 
-If Chinese text appears garbled in PowerShell output, do not immediately assume the file is damaged. Check the file with UTF-8 reads in Python or open it in a proper editor.
+---
 
-## Typical End-To-End Sequence
+## File Structure
+
+```text
+audio-transcript-pipeline/
+  README.md
+  README.zh-CN.md
+  README.en.md
+  scripts/
+  references/
+  examples/
+  agents/
+  .gitignore
+```
+
+Main scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `transcribe_local_mp3_batch.py` | batch split and transcribe local MP3 files |
+| `collect_transcripts.py` | collect completed transcripts |
+| `mp3_frame_splitter.py` | MP3 frame-level splitting |
+| `dashscope_smoke_test.py` | test DashScope text API |
+| `dashscope_asr_smoke_test.py` | test short-audio ASR |
+| `deepseek_smoke_test.py` | test DeepSeek API |
+| `run_short_audio_pipeline.py` | short-audio end-to-end sample |
+| `deepseek_notes_from_cleaned.py` | generate notes from a cleaned transcript |
+
+---
+
+## Troubleshooting
+
+### Python cannot see the API key after `setx`
+
+Refresh the current PowerShell process:
 
 ```powershell
-cd D:\path\to\standalone-skill-xiaoe-audio-transcript-pipeline-v01
-
 $env:DASHSCOPE_API_KEY = [Environment]::GetEnvironmentVariable('DASHSCOPE_API_KEY','User')
+```
 
-python scripts\dashscope_smoke_test.py --model qwen-plus
-python scripts\dashscope_asr_smoke_test.py --audio "D:\path\to\short-sample.mp3" --model qwen3-asr-flash
+### DashScope cannot access an audio URL
 
-$jobRoot = "D:\path\to\jobs\audio-transcript-YYYYMMDD-v01"
+Signed platform URLs may not be accessible to the ASR provider. Download the audio locally and use `transcribe_local_mp3_batch.py`.
 
-python scripts\transcribe_local_mp3_batch.py `
-  --input-dir "D:\path\to\audio-folder" `
-  --out-root "$jobRoot" `
-  --model qwen3-asr-flash
+### The job fails midway
 
+Rerun with the same `--out-root`; completed work is skipped.
+
+### Chinese text looks garbled in PowerShell
+
+Do not immediately assume the file is corrupted. Read it as UTF-8 with Python or open it in a UTF-8-aware editor.
+
+### Final transcripts are scattered
+
+Run:
+
+```powershell
 python scripts\collect_transcripts.py --root "$jobRoot"
 ```
 
-The final user-facing transcript files are in:
+Then use:
 
 ```text
 $jobRoot\transcripts\
 ```
+
+---
+
+## Privacy
+
+Do not commit:
+
+- audio files
+- real transcripts
+- `jobs/` outputs
+- chunk cache
+- logs
+- `.env`
+- API keys
+- browser login state
+
+These are excluded by `.gitignore`, but always check before committing.

@@ -1,146 +1,223 @@
 # 音频转文字工作流
 
-语言：中文 | [English README](README.en.md)
+[English README](README.en.md)
 
-## 版本说明 v01
+把一整个文件夹里的长音频，批量转成可阅读的 Markdown 文字稿。
 
-2026-06-08 v01：新增中文工作流说明，完整描述音频转文字链路、环境配置、烟测、批量转录、断点续跑、最终收集、输出校验和隐私边界；不展示任何具体音频内容或转录内容。
+支持 **长音频切分、国内 ASR 转录、断点续跑、集中导出、可选清理和阅读笔记**。适合课程音频、直播回放、会议录音、访谈录音等批量处理场景。
 
-## 这是什么
+---
 
-这是一个可复用的音频转文字工作流，适用于课程音频、直播回放音频、访谈录音等本地音频文件。它默认使用中国国内模型服务，核心目标是把“拿到音频”到“产出可阅读文字稿”的链路拆清楚。
+## 核心使用流程
 
-工作流会把不同层级的产物分开：
+1. 准备一批本地 MP3 音频。
+2. 配置 DashScope / DeepSeek 等 API Key。
+3. 先跑烟测，确认模型接口和余额可用。
+4. 批量转录音频文件夹。
+5. 中途失败就用同一个目录重新运行，自动断点续跑。
+6. 转录完成后，把所有文字稿集中导出到 `transcripts/`。
+7. 可选：基于原始稿生成清理稿、阅读笔记或复核稿。
 
-- 来源清单
-- 原始 ASR 文字稿
-- 可选的清理稿
-- 可选的阅读笔记或复核稿
-- 最终集中导出的文字稿文件夹
+---
 
-这套流程把转录当作证据链处理：先确认原始音频是否可用，再生成原始文字稿；只有原始文字稿存在后，才进入清理、整理、笔记或总结阶段。
+## 功能
 
-## 隐私边界
+| 功能 | 说明 |
+|------|------|
+| 本地音频批量处理 | 扫描指定文件夹中的 `.mp3` 文件 |
+| 长音频切分 | 按 MP3 帧边界切成适合短音频 API 的小块 |
+| 国内 ASR 转录 | 默认使用 DashScope / 百炼短音频 ASR |
+| 断点续跑 | 已完成课程和分块自动跳过 |
+| 集中导出 | 每讲一份 `.raw.md`，并生成一个合并稿 |
+| 分层产物 | 原始稿、清理稿、笔记分开保存 |
+| 隐私保护 | 音频、文字稿、日志、Key 默认不进仓库 |
 
-公开工作流包中不要包含：
+---
 
-- 原始音频文件
-- 生成的真实文字稿
-- 分块缓存
-- 运行日志
-- API Key
-- 浏览器登录状态或认证缓存
+## 适用场景
 
-可保留在公开包中的内容：
+适合：
 
-- 流程文档
-- 脚本
-- 不含真实内容的示例
-- 参考规则和接口约定
-- `.gitignore`
+- 课程音频、直播回放、会议录音、访谈录音的批量转文字
+- 单个音频较长，不能一次性提交给短音频 ASR
+- 希望任务中断后可以继续跑
+- 希望最终文字稿统一放在一个文件夹
+- 希望后续基于原始稿继续做清理、笔记或总结
 
-真实任务产物默认放在本地 `jobs/` 中，除非你明确制作了脱敏样例，否则不应放入公开仓库。
+不适合：
 
-## 默认模型路线
+- 没有音频、字幕或转录来源，只想根据标题生成总结
+- 不保留原始转录，直接让模型自由发挥
+- 把真实音频或真实转录内容公开到仓库
 
-默认路线：
+---
 
-- ASR：阿里云百炼 DashScope 短音频 ASR，常用模型为 `qwen3-asr-flash`
-- 长音频：先把本地 MP3 按 API 限制切成小块，再逐块转录，最后合并成每讲一份文字稿
-- 清理：在原始文字稿生成后，再用 Qwen 或 DeepSeek 做标点、分段和可读性清理
-- 笔记或复核：使用 DeepSeek 或 Qwen，作为单独的加工层保存
-
-备用路线：
-
-- 如果公开 URL 或签名媒体 URL 无法被 ASR 服务访问，改用本地音频文件。
-- 如果某次 API 调用因为网络断连失败，使用同一个输出目录重新运行批处理命令；已完成的分块和课程会自动跳过。
-- 如果遇到欠费或额度不足，充值或切换服务后，用同一个任务目录继续运行。
-
-## 目录结构
+## 工作原理
 
 ```text
-standalone-skill-xiaoe-audio-transcript-pipeline-v01/
-  README.md
-  README.zh-CN.md
-  README.en.md
-  SKILL.md
-  .gitignore
-  references/
-    engine-contract.md
-    cleanup-rules.md
-    output-conventions.md
-  scripts/
-    audio_transcript_pipeline.py
-    dashscope_smoke_test.py
-    dashscope_asr_smoke_test.py
-    deepseek_smoke_test.py
-    run_short_audio_pipeline.py
-    deepseek_notes_from_cleaned.py
-    dashscope_url_transcribe.py
-    mp3_frame_splitter.py
-    transcribe_local_mp3_batch.py
-    collect_transcripts.py
-  examples/
-  jobs/                  # 本地生成产物
+本地音频文件夹
+  → 扫描 MP3
+  → 长音频切分
+  → 分块调用 ASR
+  → 保存分块缓存
+  → 合并为每个音频一份原始稿
+  → 集中导出到 transcripts/
+  → 可选：清理稿 / 阅读笔记 / 复核稿
 ```
 
-## 环境配置
+关键点：
 
-建议使用 Python 3.10 或更新版本。
+- **分块**：长音频会被切成符合 API 限制的小块。
+- **缓存**：每个分块结果都会保存，失败后不用从头来。
+- **合并**：最终按音频合并成完整文字稿。
+- **集中**：最终只需要看 `transcripts/` 文件夹。
 
-在 Windows PowerShell 中设置 API Key：
+---
+
+## 前提条件
+
+- Windows / macOS / Linux 均可，示例命令以 Windows PowerShell 为主
+- Python 3.10+
+- DashScope / 百炼 API Key
+- 可选：DeepSeek API Key
+
+---
+
+## 配置 API Key
+
+PowerShell 中设置：
 
 ```powershell
 setx DASHSCOPE_API_KEY "your_dashscope_key"
 setx DEEPSEEK_API_KEY "your_deepseek_key"
 ```
 
-`setx` 会把变量写入 Windows 用户环境，但不会立即更新当前 PowerShell 进程。当前窗口中需要再执行：
+`setx` 不会立刻更新当前窗口，所以当前 PowerShell 还需要执行：
 
 ```powershell
 $env:DASHSCOPE_API_KEY = [Environment]::GetEnvironmentVariable('DASHSCOPE_API_KEY','User')
 $env:DEEPSEEK_API_KEY = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY','User')
 ```
 
-检查 Key 是否可见：
+检查是否生效：
 
 ```powershell
 python -c "import os; print(bool(os.getenv('DASHSCOPE_API_KEY')))"
 python -c "import os; print(bool(os.getenv('DEEPSEEK_API_KEY')))"
 ```
 
-## 烟测
+---
 
-测试 DashScope 文本访问：
+## 快速开始
+
+进入项目目录：
+
+```powershell
+cd D:\path\to\audio-transcript-pipeline
+```
+
+### 第一步：烟测
+
+测试 DashScope 文本接口：
 
 ```powershell
 python scripts\dashscope_smoke_test.py --model qwen-plus
 ```
 
-用一个小音频测试 DashScope 短音频 ASR：
+用一个短音频测试 ASR：
 
 ```powershell
-python scripts\dashscope_asr_smoke_test.py --audio "D:\path\to\short-sample.mp3" --model qwen3-asr-flash
+python scripts\dashscope_asr_smoke_test.py `
+  --audio "D:\path\to\short-sample.mp3" `
+  --model qwen3-asr-flash
 ```
 
-测试 DeepSeek 文本访问：
+可选：测试 DeepSeek：
 
 ```powershell
 python scripts\deepseek_smoke_test.py --model deepseek-v4-flash
 ```
 
-只有这些烟测通过后，再开始大批量转录。
-
-## 批量转录流程
-
-创建一个带版本号的任务目录：
+### 第二步：批量转录
 
 ```powershell
-$jobRoot = "D:\path\to\jobs\part-transcript-YYYYMMDD-v01"
-New-Item -ItemType Directory -Force -Path $jobRoot | Out-Null
+$jobRoot = "D:\path\to\jobs\audio-transcript-YYYYMMDD-v01"
+
+python scripts\transcribe_local_mp3_batch.py `
+  --input-dir "D:\path\to\audio-folder" `
+  --out-root "$jobRoot" `
+  --model qwen3-asr-flash
 ```
 
-运行本地 MP3 批量转录：
+### 第三步：集中导出
+
+```powershell
+python scripts\collect_transcripts.py --root "$jobRoot"
+```
+
+最终文字稿位于：
+
+```text
+$jobRoot\transcripts\
+```
+
+---
+
+## 批量转录参数
+
+```text
+--input-dir     本地音频文件夹
+--out-root      本次任务输出目录
+--model         ASR 模型，默认 qwen3-asr-flash
+--max-seconds   每个分块目标秒数，默认 240
+--max-bytes     每个分块最大字节数，默认 9500000
+--retries       单个分块失败时的重试次数
+--limit         只处理前 N 个文件，用于小样本测试
+--start-at      从文件名包含某段文本的位置开始
+```
+
+---
+
+## 输出格式
+
+一次任务完成后，目录大致如下：
+
+```text
+jobRoot/
+  <audio-title>/
+    chunks/
+      chunk_0000.mp3
+      chunks-manifest.json
+    raw/
+      chunk-results/
+        chunk_0000.json
+        chunk_0000.txt
+      transcript.raw.md
+    lesson.json
+  transcripts/
+    index.md
+    index.json
+    part2.raw.combined.md
+    <audio-title>.raw.md
+```
+
+推荐阅读：
+
+- `transcripts/index.md`：文字稿目录
+- `transcripts/index.json`：机器可读索引
+- `transcripts/part2.raw.combined.md`：全部文字稿合并版
+- `transcripts/<audio-title>.raw.md`：每个音频单独文字稿
+
+内部文件：
+
+- `chunks/`：音频分块
+- `raw/chunk-results/`：分块缓存和 API 原始结果
+
+---
+
+## 断点续跑
+
+如果任务中途停止，用同一个命令、同一个 `--out-root` 再跑一次：
 
 ```powershell
 python scripts\transcribe_local_mp3_batch.py `
@@ -149,66 +226,20 @@ python scripts\transcribe_local_mp3_batch.py `
   --model qwen3-asr-flash
 ```
 
-常用可选参数：
+脚本会自动：
 
-```powershell
---max-seconds 240
---max-bytes 9500000
---retries 3
---limit 3
---start-at "filename fragment"
-```
+- 跳过已完成音频
+- 复用已完成分块
+- 从缺失分块继续
+- 允许之后重新生成集中导出
 
-批处理脚本会执行以下步骤：
+---
 
-1. 从 `--input-dir` 读取本地 MP3 文件。
-2. 在 `--out-root` 下为每个音频创建单独任务目录。
-3. 按 MP3 帧边界切分为符合 API 限制的小块。
-4. 将每个音频块发送给 DashScope 短音频 ASR。
-5. 保存分块级 JSON 和文本缓存。
-6. 将分块文本合并为每个音频一份 `raw/transcript.raw.md`。
-7. 写入 `lesson.json`，记录状态、分块数量、预估时长和完成时间。
-8. 将已完成文字稿导出到集中 `transcripts/` 文件夹。
+## 可选：清理稿和阅读笔记
 
-## 断点续跑
+原始稿生成后，可以继续生成清理稿或笔记。
 
-这套流程支持断点续跑。
-
-如果任务因为网络中断、额度不足、欠费、进程退出等原因停止，用同样的命令和同一个 `--out-root` 再跑一次即可。
-
-重新运行时：
-
-- `lesson.json` 状态为 `done` 的音频会被跳过
-- 已写入的分块缓存会被复用
-- 未完成的课程会从缺失分块继续
-- 最终集中导出文件可以随时重新生成
-
-## 收集最终文字稿
-
-批量转录完成后，把所有已完成课程集中整理到一个文件夹：
-
-```powershell
-python scripts\collect_transcripts.py --root "$jobRoot"
-```
-
-该命令会生成：
-
-```text
-$jobRoot/
-  transcripts/
-    index.md
-    index.json
-    part2.raw.combined.md
-    <one-file-per-audio>.raw.md
-```
-
-最终阅读和导出应使用 `transcripts/` 文件夹。分块目录只是内部证据和断点缓存。
-
-## 可选清理层
-
-清理层必须在原始文字稿存在之后再运行。
-
-短音频端到端样例：
+短音频端到端示例：
 
 ```powershell
 python scripts\run_short_audio_pipeline.py `
@@ -222,41 +253,27 @@ python scripts\run_short_audio_pipeline.py `
 python scripts\deepseek_notes_from_cleaned.py --job-dir "D:\path\to\job"
 ```
 
-建议始终分层保存：
+建议分层保存：
 
-- `raw/transcript.raw.md`：ASR 原始稿，最贴近音频来源
-- `cleaned/transcript.cleaned.md`：标点、分段和可读性清理
-- `notes/notes.source-faithful.md`：忠实原内容的阅读笔记
-- `summary.processed.md`：可选的进一步提炼或改写
+```text
+raw/transcript.raw.md              原始 ASR 文字稿
+cleaned/transcript.cleaned.md      清理稿
+notes/notes.source-faithful.md     忠实原内容的阅读笔记
+summary.processed.md               可选提炼稿
+```
 
-## 输出规则
-
-所有重要输出都应包含：
-
-- 版本说明
-- 来源或证据说明
-- 来源文件或来源 URI
-- 边界说明，明确当前文件是原始 ASR、清理稿、阅读笔记还是加工总结
-
-不要把原始 ASR 当成事实核验结果。除非后续复核层明确加入外部引用，否则文字稿内容只代表音频转录结果。
+---
 
 ## 校验清单
 
-交付前先重新收集一次：
+交付前检查：
 
-```powershell
-python scripts\collect_transcripts.py --root "$jobRoot"
-```
-
-然后检查：
-
-- `lesson.json` 数量等于输入音频数量
+- 输入音频数量和 `lesson.json` 数量一致
 - 每个 `lesson.json` 的状态都是 `done`
-- `transcripts/` 中每个输入音频都有一份 `.raw.md`
+- `transcripts/` 下有对应数量的 `.raw.md`
 - `part2.raw.combined.md` 存在
-- `index.json` 可以按 UTF-8 JSON 正常解析
-- 最终文字稿包含 `## Version Note` 和 `## Source / Evidence Note`
-- 最终文字稿不包含内部 chunk 标记
+- `index.json` 可以按 UTF-8 JSON 解析
+- 最终文字稿不含内部 chunk 标记
 
 JSON 校验示例：
 
@@ -264,30 +281,86 @@ JSON 校验示例：
 python -c "from pathlib import Path; import json; p=Path(r'D:\path\to\job\transcripts\index.json'); d=json.loads(p.read_text(encoding='utf-8')); print(d['completed'], len(d['items']))"
 ```
 
-如果 PowerShell 中出现中文乱码，不要立刻判断文件损坏。应先用 Python 按 UTF-8 读取，或用支持 UTF-8 的编辑器打开确认。
+---
 
-## 典型端到端命令
+## 文件结构
+
+```text
+audio-transcript-pipeline/
+  README.md
+  README.zh-CN.md
+  README.en.md
+  scripts/
+  references/
+  examples/
+  agents/
+  .gitignore
+```
+
+主要脚本：
+
+| 脚本 | 作用 |
+|------|------|
+| `transcribe_local_mp3_batch.py` | 批量切分并转录本地 MP3 |
+| `collect_transcripts.py` | 收集已完成文字稿 |
+| `mp3_frame_splitter.py` | MP3 帧级切分 |
+| `dashscope_smoke_test.py` | 测试 DashScope 文本接口 |
+| `dashscope_asr_smoke_test.py` | 测试短音频 ASR |
+| `deepseek_smoke_test.py` | 测试 DeepSeek |
+| `run_short_audio_pipeline.py` | 短音频端到端样例 |
+| `deepseek_notes_from_cleaned.py` | 从清理稿生成阅读笔记 |
+
+---
+
+## 常见问题
+
+### `setx` 后 Python 仍然读不到 API Key
+
+当前 PowerShell 窗口需要手动刷新环境变量：
 
 ```powershell
-cd D:\path\to\standalone-skill-xiaoe-audio-transcript-pipeline-v01
-
 $env:DASHSCOPE_API_KEY = [Environment]::GetEnvironmentVariable('DASHSCOPE_API_KEY','User')
+```
 
-python scripts\dashscope_smoke_test.py --model qwen-plus
-python scripts\dashscope_asr_smoke_test.py --audio "D:\path\to\short-sample.mp3" --model qwen3-asr-flash
+### DashScope 无法读取音频 URL
 
-$jobRoot = "D:\path\to\jobs\audio-transcript-YYYYMMDD-v01"
+平台签名 URL 可能无法被 ASR 服务访问。建议下载为本地音频后，用 `transcribe_local_mp3_batch.py` 处理。
 
-python scripts\transcribe_local_mp3_batch.py `
-  --input-dir "D:\path\to\audio-folder" `
-  --out-root "$jobRoot" `
-  --model qwen3-asr-flash
+### 任务中途失败
 
+用同一个 `--out-root` 重新运行。脚本会跳过已完成内容。
+
+### PowerShell 里中文显示乱码
+
+先不要判断文件损坏。用 Python 按 UTF-8 读取，或用支持 UTF-8 的编辑器打开确认。
+
+### 最终文字稿很分散
+
+运行：
+
+```powershell
 python scripts\collect_transcripts.py --root "$jobRoot"
 ```
 
-最终面向使用者的文字稿位于：
+然后只看：
 
 ```text
 $jobRoot\transcripts\
 ```
+
+---
+
+## 隐私
+
+不要提交：
+
+- 音频文件
+- 真实文字稿
+- `jobs/` 产物
+- 分块缓存
+- 日志
+- `.env`
+- API Key
+- 浏览器登录状态
+
+`.gitignore` 已默认排除这些类型，提交前仍建议检查。
